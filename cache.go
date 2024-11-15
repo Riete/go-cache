@@ -170,6 +170,9 @@ func New[T any](config *Config) *Storage[T] {
 	if config.CompactFactor > maxCompactFactor {
 		config.CompactFactor = maxCompactFactor
 	}
+	if config.MinDeletion < defaultMinDeletion {
+		config.MinDeletion = defaultMinDeletion
+	}
 	var shards []*storage[T]
 	for i := config.ShardsNum; i > 0; i-- {
 		shards = append(shards, newStorage[T](config))
