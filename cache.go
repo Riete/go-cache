@@ -121,7 +121,7 @@ func (s *storage[T]) clear() {
 }
 
 func newStorage[T any](config *Config) *storage[T] {
-	return &storage[T]{m: map[string]*object[T]{}, config: config}
+	return &storage[T]{m: make(map[string]*object[T]), config: config}
 }
 
 type Storage[T any] struct {
