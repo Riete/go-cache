@@ -156,66 +156,66 @@ func newStorage[T any](config *Config) *storage[T] {
 	return &storage[T]{m: make(map[string]*object[T]), config: config}
 }
 
-type Storage[T any] struct {
+type Cache[T any] struct {
 	shards []*storage[T]
 }
 
-func (s *Storage[T]) storage(k string) *storage[T] {
+func (c *Cache[T]) storage(k string) *storage[T] {
 	index := crc32.ChecksumIEEE([]byte(k))
-	return s.shards[int(index)%len(s.shards)]
+	return c.shards[int(index)%len(c.shards)]
 }
 
-func (s *Storage[T]) Get(k string) (T, bool) {
-	return s.storage(k).get(k)
+func (c *Cache[T]) Get(k string) (T, bool) {
+	return c.storage(k).get(k)
 }
 
-func (s *Storage[T]) Exists(k string) bool {
-	return s.storage(k).exists(k)
+func (c *Cache[T]) Exists(k string) bool {
+	return c.storage(k).exists(k)
 }
 
-func (s *Storage[T]) Set(k string, v T) {
-	s.storage(k).set(k, v)
+func (c *Cache[T]) Set(k string, v T) {
+	c.storage(k).set(k, v)
 }
 
-func (s *Storage[T]) SetWithTTL(k string, v T, ttl time.Duration) {
-	s.storage(k).setWithTTL(k, v, ttl)
+func (c *Cache[T]) SetWithTTL(k string, v T, ttl time.Duration) {
+	c.storage(k).setWithTTL(k, v, ttl)
 }
 
-func (s *Storage[T]) SetIfNX(k string, v T) bool {
-	return s.storage(k).setIfNX(k, v)
+func (c *Cache[T]) SetIfNX(k string, v T) bool {
+	return c.storage(k).setIfNX(k, v)
 }
 
-func (s *Storage[T]) SetIfNXWithTTL(k string, v T, ttl time.Duration) bool {
-	return s.storage(k).setIfNXWithTTL(k, v, ttl)
+func (c *Cache[T]) SetIfNXWithTTL(k string, v T, ttl time.Duration) bool {
+	return c.storage(k).setIfNXWithTTL(k, v, ttl)
 }
 
-func (s *Storage[T]) AdjustExpirationTime(k string, offset time.Duration) (success bool) {
-	return s.storage(k).adjustExpirationTime(k, offset)
+func (c *Cache[T]) AdjustExpirationTime(k string, offset time.Duration) (success bool) {
+	return c.storage(k).adjustExpirationTime(k, offset)
 }
 
-func (s *Storage[T]) AdjustExpiredAt(k string, ex time.Time) (success bool) {
-	return s.storage(k).adjustExpiredAt(k, ex)
+func (c *Cache[T]) AdjustExpiredAt(k string, ex time.Time) (success bool) {
+	return c.storage(k).adjustExpiredAt(k, ex)
 }
 
-func (s *Storage[T]) Delete(k string) {
-	s.storage(k).delete(k)
+func (c *Cache[T]) Delete(k string) {
+	c.storage(k).delete(k)
 }
 
-func (s *Storage[T]) Keys() []string {
+func (c *Cache[T]) Keys() []string {
 	var keys []string
-	for _, shard := range s.shards {
+	for _, shard := range c.shards {
 		keys = append(keys, shard.keys()...)
 	}
 	return keys
 }
 
-func (s *Storage[T]) Clear() {
-	for _, shard := range s.shards {
+func (c *Cache[T]) Clear() {
+	for _, shard := range c.shards {
 		shard.clear()
 	}
 }
 
-func New[T any](config *Config) *Storage[T] {
+func New[T any](config *Config) *Cache[T] {
 	if config == nil {
 		config = DefaultConfig
 	}
@@ -229,5 +229,5 @@ func New[T any](config *Config) *Storage[T] {
 	for i := config.ShardsNum; i > 0; i-- {
 		shards = append(shards, newStorage[T](config))
 	}
-	return &Storage[T]{shards: shards}
+	return &Cache[T]{shards: shards}
 }
