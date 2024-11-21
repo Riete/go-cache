@@ -26,11 +26,15 @@ type Config struct {
 	TTL           time.Duration
 }
 
-var DefaultConfig = &Config{
-	CompactFactor: defaultCompactFactor,
-	MinDeletion:   defaultMinDeletion,
-	ShardsNum:     defaultShardsNum,
-	TTL:           defaultTTL,
+var DefaultConfig = NewDefaultConfig()
+
+func NewDefaultConfig() *Config {
+	return &Config{
+		CompactFactor: defaultCompactFactor,
+		MinDeletion:   defaultMinDeletion,
+		ShardsNum:     defaultShardsNum,
+		TTL:           defaultTTL,
+	}
 }
 
 type object[T any] struct {
@@ -215,9 +219,17 @@ func (c *Cache[T]) Clear() {
 	}
 }
 
+func newCache[T any](config *Config) *Cache[T] {
+	var shards []*storage[T]
+	for i := config.ShardsNum; i > 0; i-- {
+		shards = append(shards, newStorage[T](config))
+	}
+	return &Cache[T]{shards: shards}
+}
+
 func New[T any](config *Config) *Cache[T] {
 	if config == nil {
-		config = DefaultConfig
+		return NewWithDefaultConfig[T]()
 	}
 	if config.CompactFactor > maxCompactFactor {
 		config.CompactFactor = maxCompactFactor
@@ -225,9 +237,10 @@ func New[T any](config *Config) *Cache[T] {
 	if config.MinDeletion < defaultMinDeletion {
 		config.MinDeletion = defaultMinDeletion
 	}
-	var shards []*storage[T]
-	for i := config.ShardsNum; i > 0; i-- {
-		shards = append(shards, newStorage[T](config))
-	}
-	return &Cache[T]{shards: shards}
+	c := *config
+	return newCache[T](&c)
+}
+
+func NewWithDefaultConfig[T any]() *Cache[T] {
+	return newCache[T](NewDefaultConfig())
 }
