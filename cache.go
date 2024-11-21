@@ -85,8 +85,7 @@ func (s *storage[T]) setIfNX(k string, v T) bool {
 func (s *storage[T]) setIfNXWithTTL(k string, v T, ttl time.Duration) bool {
 	s.rw.Lock()
 	defer s.rw.Unlock()
-	o, ok := s.m[k]
-	if !ok || o.expired() {
+	if o, ok := s.m[k]; !ok || o.expired() {
 		s.m[k] = &object[T]{obj: v, expiredAt: time.Now().Add(ttl)}
 		return true
 	}
@@ -96,7 +95,7 @@ func (s *storage[T]) setIfNXWithTTL(k string, v T, ttl time.Duration) bool {
 func (s *storage[T]) adjustExpirationTime(k string, offset time.Duration) {
 	s.rw.Lock()
 	defer s.rw.Unlock()
-	if o, ok := s.m[k]; ok {
+	if o, ok := s.m[k]; ok && !o.expired() {
 		o.expiredAt = o.expiredAt.Add(offset)
 	}
 }
@@ -104,7 +103,7 @@ func (s *storage[T]) adjustExpirationTime(k string, offset time.Duration) {
 func (s *storage[T]) adjustExpiredAt(k string, ex time.Time) {
 	s.rw.Lock()
 	defer s.rw.Unlock()
-	if o, ok := s.m[k]; ok {
+	if o, ok := s.m[k]; ok && !o.expired() {
 		o.expiredAt = ex
 	}
 }
