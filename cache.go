@@ -92,20 +92,24 @@ func (s *storage[T]) setIfNXWithTTL(k string, v T, ttl time.Duration) bool {
 	return false
 }
 
-func (s *storage[T]) adjustExpirationTime(k string, offset time.Duration) {
+func (s *storage[T]) adjustExpirationTime(k string, offset time.Duration) (success bool) {
 	s.rw.Lock()
 	defer s.rw.Unlock()
 	if o, ok := s.m[k]; ok && !o.expired() {
 		o.expiredAt = o.expiredAt.Add(offset)
+		success = true
 	}
+	return
 }
 
-func (s *storage[T]) adjustExpiredAt(k string, ex time.Time) {
+func (s *storage[T]) adjustExpiredAt(k string, ex time.Time) (success bool) {
 	s.rw.Lock()
 	defer s.rw.Unlock()
 	if o, ok := s.m[k]; ok && !o.expired() {
 		o.expiredAt = ex
+		success = true
 	}
+	return
 }
 
 func (s *storage[T]) delete(k string) {
@@ -185,12 +189,12 @@ func (s *Storage[T]) SetIfNXWithTTL(k string, v T, ttl time.Duration) bool {
 	return s.storage(k).setIfNXWithTTL(k, v, ttl)
 }
 
-func (s *Storage[T]) AdjustExpirationTime(k string, offset time.Duration) {
-	s.storage(k).adjustExpirationTime(k, offset)
+func (s *Storage[T]) AdjustExpirationTime(k string, offset time.Duration) (success bool) {
+	return s.storage(k).adjustExpirationTime(k, offset)
 }
 
-func (s *Storage[T]) AdjustExpiredAt(k string, ex time.Time) {
-	s.storage(k).adjustExpiredAt(k, ex)
+func (s *Storage[T]) AdjustExpiredAt(k string, ex time.Time) (success bool) {
+	return s.storage(k).adjustExpiredAt(k, ex)
 }
 
 func (s *Storage[T]) Delete(k string) {
