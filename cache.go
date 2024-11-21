@@ -69,9 +69,7 @@ func (s *storage[T]) exists(k string) bool {
 }
 
 func (s *storage[T]) set(k string, v T) {
-	s.rw.Lock()
-	defer s.rw.Unlock()
-	s.m[k] = &object[T]{obj: v, expiredAt: time.Now().Add(s.config.TTL)}
+	s.setWithTTL(k, v, s.config.TTL)
 }
 
 func (s *storage[T]) setWithTTL(k string, v T, ttl time.Duration) {
@@ -81,14 +79,7 @@ func (s *storage[T]) setWithTTL(k string, v T, ttl time.Duration) {
 }
 
 func (s *storage[T]) setIfNX(k string, v T) bool {
-	s.rw.Lock()
-	defer s.rw.Unlock()
-	o, ok := s.m[k]
-	if !ok || o.expired() {
-		s.m[k] = &object[T]{obj: v, expiredAt: time.Now().Add(s.config.TTL)}
-		return true
-	}
-	return false
+	return s.setIfNXWithTTL(k, v, s.config.TTL)
 }
 
 func (s *storage[T]) setIfNXWithTTL(k string, v T, ttl time.Duration) bool {
