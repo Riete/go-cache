@@ -1,8 +1,11 @@
 package cache
 
 import (
+	"context"
 	"hash/crc32"
 	"maps"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 )
@@ -14,6 +17,67 @@ const (
 	defaultTTL           = 5 * time.Minute
 	maxCompactFactor     = 0.7
 )
+
+type IteratorEntry[T any] struct {
+	Key   string
+	Value T
+}
+
+type KeyFunc func(string) bool
+
+var MatchAll KeyFunc = func(string) bool { return true }
+
+// ContainsAny return true if match any substring
+var ContainsAny = func(subStrings ...string) KeyFunc {
+	return func(key string) bool {
+		for _, ss := range subStrings {
+			if strings.Contains(key, ss) {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+// ContainsAll return true if match all substrings
+var ContainsAll = func(subStrings ...string) KeyFunc {
+	return func(key string) bool {
+		for _, ss := range subStrings {
+			if !strings.Contains(key, ss) {
+				return false
+			}
+		}
+		return true
+	}
+}
+
+var HasPrefix = func(prefix string) KeyFunc {
+	return func(key string) bool {
+		return strings.HasPrefix(key, prefix)
+	}
+}
+
+var HasSuffix = func(suffix string) KeyFunc {
+	return func(key string) bool {
+		return strings.HasSuffix(key, suffix)
+	}
+}
+
+var Regex = func(pattern string) KeyFunc {
+	return func(key string) bool {
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			return false
+		}
+		return re.FindString(key) != ""
+	}
+}
+
+var MatchFunc = func(f func(string) bool) KeyFunc {
+	return func(key string) bool {
+		return f(key)
+	}
+}
 
 // Config
 // if deletionCount > MinDeletion && len(map) / MinDeletion < CompactFactor, do map compact
@@ -135,14 +199,19 @@ func (s *storage[T]) delete(k string) {
 	}
 }
 
-func (s *storage[T]) keys() []string {
+func (s *storage[T]) keys(f KeyFunc) []string {
 	s.rw.RLock()
 	defer s.rw.RUnlock()
+	if f == nil {
+		f = MatchAll
+	}
 	var keys []string
 	for k, v := range s.m {
 		if v.expired() {
 			go s.delete(k)
-		} else {
+			continue
+		}
+		if f(k) {
 			keys = append(keys, k)
 		}
 	}
@@ -173,8 +242,27 @@ func (c *Cache[T]) Get(k string) (T, bool) {
 	return c.storage(k).get(k)
 }
 
+func (c *Cache[T]) MGet(ks ...string) map[string]T {
+	m := make(map[string]T)
+	for _, k := range ks {
+		if v, ok := c.Get(k); ok {
+			m[k] = v
+		}
+	}
+	return m
+}
+
 func (c *Cache[T]) Exists(k string) bool {
 	return c.storage(k).exists(k)
+}
+
+func (c *Cache[T]) MExists(ks ...string) bool {
+	for _, k := range ks {
+		if !c.Exists(k) {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *Cache[T]) Set(k string, v T) {
@@ -205,12 +293,33 @@ func (c *Cache[T]) Delete(k string) {
 	c.storage(k).delete(k)
 }
 
-func (c *Cache[T]) Keys() []string {
+func (c *Cache[T]) Keys(f KeyFunc) []string {
 	var keys []string
 	for _, shard := range c.shards {
-		keys = append(keys, shard.keys()...)
+		keys = append(keys, shard.keys(f)...)
 	}
 	return keys
+}
+
+func (c *Cache[T]) Iterator(ctx context.Context, f KeyFunc) chan IteratorEntry[T] {
+	ch := make(chan IteratorEntry[T])
+	if f == nil {
+		f = MatchAll
+	}
+	go func() {
+		defer close(ch)
+		for _, s := range c.shards {
+			for k, v := range s.m {
+				if ctx.Err() != nil {
+					return
+				}
+				if f(k) && !v.expired() {
+					ch <- IteratorEntry[T]{Key: k, Value: v.obj}
+				}
+			}
+		}
+	}()
+	return ch
 }
 
 func (c *Cache[T]) Clear() {
