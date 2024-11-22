@@ -218,6 +218,19 @@ func (s *storage[T]) keys(f KeyFunc) []string {
 	return keys
 }
 
+func (s *storage[T]) iterator(ctx context.Context, f KeyFunc, ch chan IteratorEntry[T]) {
+	s.rw.RLock()
+	defer s.rw.RUnlock()
+	for k, v := range s.m {
+		if ctx.Err() != nil {
+			return
+		}
+		if f(k) && !v.expired() {
+			ch <- IteratorEntry[T]{Key: k, Value: v.obj}
+		}
+	}
+}
+
 func (s *storage[T]) clear() {
 	s.rw.Lock()
 	defer s.rw.Unlock()
@@ -308,15 +321,11 @@ func (c *Cache[T]) Iterator(ctx context.Context, f KeyFunc) chan IteratorEntry[T
 	}
 	go func() {
 		defer close(ch)
-		for _, s := range c.shards {
-			for k, v := range s.m {
-				if ctx.Err() != nil {
-					return
-				}
-				if f(k) && !v.expired() {
-					ch <- IteratorEntry[T]{Key: k, Value: v.obj}
-				}
+		for _, shard := range c.shards {
+			if ctx.Err() != nil {
+				return
 			}
+			shard.iterator(ctx, f, ch)
 		}
 	}()
 	return ch
