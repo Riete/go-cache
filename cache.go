@@ -222,11 +222,13 @@ func (s *storage[T]) iterator(ctx context.Context, f KeyFunc, ch chan IteratorEn
 	s.rw.RLock()
 	defer s.rw.RUnlock()
 	for k, v := range s.m {
-		if ctx.Err() != nil {
+		select {
+		case <-ctx.Done():
 			return
-		}
-		if f(k) && !v.expired() {
-			ch <- IteratorEntry[T]{Key: k, Value: v.obj}
+		default:
+			if f(k) && !v.expired() {
+				ch <- IteratorEntry[T]{Key: k, Value: v.obj}
+			}
 		}
 	}
 }
@@ -322,10 +324,12 @@ func (c *Cache[T]) Iterator(ctx context.Context, f KeyFunc) chan IteratorEntry[T
 	go func() {
 		defer close(ch)
 		for _, shard := range c.shards {
-			if ctx.Err() != nil {
+			select {
+			case <-ctx.Done():
 				return
+			default:
+				shard.iterator(ctx, f, ch)
 			}
-			shard.iterator(ctx, f, ch)
 		}
 	}()
 	return ch
