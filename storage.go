@@ -162,31 +162,16 @@ func (s *storage[T]) keys(f KeyFunc) []string {
 }
 
 func (s *storage[T]) iterator(ctx context.Context, f KeyFunc) chan IteratorEntry[T] {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if f == nil {
-		f = MatchAll
-	}
 	ch := make(chan IteratorEntry[T])
 	go func() {
-		var expired []string
-		defer func() {
-			if len(expired) > 0 {
-				go s.delete(expired...)
-			}
-			close(ch)
-		}()
-		for k, v := range s.m {
+		defer close(ch)
+		for _, k := range s.keys(f) {
 			select {
 			case <-ctx.Done():
 				return
 			default:
-				if v.expired() {
-					expired = append(expired, k)
-					continue
-				}
-				if f(k) {
-					ch <- IteratorEntry[T]{Key: k, Value: v.obj}
+				if v, exists := s.get(k); exists {
+					ch <- IteratorEntry[T]{Key: k, Value: v}
 				}
 			}
 		}

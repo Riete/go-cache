@@ -58,9 +58,9 @@ func (c *Cache[T]) Keys(f KeyFunc) []string {
 	go func() {
 		defer close(ch)
 		for _, shard := range c.shards {
-			go func(shard *storage[T]) {
+			go func(s *storage[T]) {
 				defer wg.Done()
-				ch <- shard.keys(f)
+				ch <- s.keys(f)
 			}(shard)
 		}
 		wg.Wait()
@@ -82,12 +82,12 @@ func (c *Cache[T]) Iterator(ctx context.Context, f KeyFunc) chan IteratorEntry[T
 				return
 			default:
 				wg.Add(1)
-				go func() {
+				go func(s *storage[T]) {
 					defer wg.Done()
-					for i := range shard.iterator(ctx, f) {
+					for i := range s.iterator(ctx, f) {
 						ch <- i
 					}
-				}()
+				}(shard)
 			}
 		}
 		wg.Wait()
