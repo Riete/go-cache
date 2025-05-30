@@ -76,6 +76,7 @@ func (c *Cache[T]) Iterator(ctx context.Context, f KeyFunc) chan IteratorEntry[T
 	ch := make(chan IteratorEntry[T], 100)
 	go func() {
 		defer close(ch)
+		defer wg.Wait()
 		for _, shard := range c.shards {
 			select {
 			case <-ctx.Done():
@@ -90,7 +91,6 @@ func (c *Cache[T]) Iterator(ctx context.Context, f KeyFunc) chan IteratorEntry[T
 				}(shard)
 			}
 		}
-		wg.Wait()
 	}()
 	return ch
 }
